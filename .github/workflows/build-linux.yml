@@ -1,18 +1,18 @@
 name: Build Linux e publicar
 
-# Compila o Tanja para Linux (AppImage + deb), roda os testes e anexa os arquivos à Release da versão.
+# Compila o Tanja para Linux (AppImage, deb, rpm, snap, pacman, tar.gz), roda os testes e anexa os arquivos à Release da versão.
 # Este workflow mora aqui (e não no repositório do código) porque o GITHUB_TOKEN deste repositório já pode
 # publicar nas Releases dele, então nenhuma credencial com poder de escrita precisa ser guardada em lugar nenhum.
 # O código-fonte (repositório privado Glawther/tanja) é lido com uma chave de implantação SOMENTE LEITURA,
 # guardada como o segredo TANJA_SOURCE_KEY.
 #
 # Disparo (o `npm run release` do projeto faz isso sozinho):
-#   gh workflow run build-linux.yml --repo Glawther/tanja-releases -f version=0.3.1 -f ref=main
+#   gh workflow run build-linux.yml --repo Glawther/tanja-releases -f version=0.4.2 -f ref=main
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Versão (ex.: 0.3.1). Precisa bater com a versão do package.json do código.'
+        description: 'Versão (ex.: 0.4.2). Precisa bater com a versão do package.json do código.'
         required: true
       ref:
         description: 'Commit ou branch do código-fonte'
@@ -58,12 +58,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
 
-      - name: Dependências do sistema (LibreOffice para os testes; Xvfb e xdotool para simular o gesto)
+      - name: Dependências do sistema (LibreOffice para os testes; Xvfb, xdotool, rpm, bsdtar e squashfs para os pacotes)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libreoffice-writer libreoffice-impress libreoffice-draw \
-            xvfb xdotool libgtk-3-0 libnss3 libxss1 libxtst6 libatspi2.0-0 libuuid1 libsecret-1-0 libnotify4 libasound2
+            xvfb xdotool rpm xz-utils libarchive-tools squashfs-tools \
+            libgtk-3-0 libnss3 libxss1 libxtst6 libatspi2.0-0 libuuid1 libsecret-1-0 libnotify4 libasound2
 
       - name: Instalar dependências do projeto
         working-directory: tanja
@@ -73,9 +74,9 @@ jobs:
         working-directory: tanja
         run: REQUIRE_LO=1 node scripts/selftest.js
 
-      - name: Compilar (AppImage + deb)
+      - name: Compilar (AppImage, deb, rpm, snap, pacman, tar.gz)
         working-directory: tanja
-        run: npx electron-builder --linux AppImage deb --publish never
+        run: npx electron-builder --linux AppImage deb rpm snap pacman tar.gz --publish never
 
       - name: Teste de abertura e do gesto (Xvfb)
         working-directory: tanja
@@ -86,5 +87,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ls -la dist/*.AppImage dist/*.deb dist/latest-linux.yml
-          gh release upload "$TAG" dist/*.AppImage dist/*.deb dist/latest-linux.yml --clobber --repo "$GITHUB_REPOSITORY"
+          ls -la dist/*.AppImage dist/*.deb dist/*.rpm dist/*.snap dist/*.pacman dist/*.tar.gz dist/latest-linux.yml scripts/install-linux.sh
+          gh release upload "$TAG" dist/*.AppImage dist/*.deb dist/*.rpm dist/*.snap dist/*.pacman dist/*.tar.gz dist/latest-linux.yml scripts/install-linux.sh --clobber --repo "$GITHUB_REPOSITORY"
